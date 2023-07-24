@@ -1,0 +1,6 @@
+[submodule "overcooked_ai"]
+	path = overcooked_ai
+	url = git@github.com:StephAO/overcooked_ai.git
+[submodule "HAHA"]
+	path = HAHA
+	url = git@github.com:StephAO/HAHA.git
