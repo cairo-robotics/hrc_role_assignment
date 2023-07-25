@@ -1,5 +1,30 @@
 import openai
 import yaml
+import json
+
+FORMATTING_PROMPT = "Please format your last response as a Python dictionary. Use the format {'Division name' : {'Role name' : ['Task list']}}"
+
+SAMPLE_GPT_OUTPUT = {
+  "id": "chatcmpl-7gJb4ll8OC1G9ifdPzbjkBx95l99A",
+  "object": "chat.completion",
+  "created": 1690319462,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  'Division 1': {\n    'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'],\n    'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']\n  },\n  'Division 2': {\n    'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'],\n    'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 3': {\n    'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 4': {\n    'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  }\n}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 514,
+    "completion_tokens": 372,
+    "total_tokens": 886
+  }
+}
 
 class GPTRolePrompter:
     def __init__(self):
@@ -7,43 +32,49 @@ class GPTRolePrompter:
             self.api_key = yaml.safe_load(stream)["OPENAI_API_KEY"]
             openai.api_key = self.api_key
 
-    def get_llm_response(self, prompt, temperature=0.6):
+    def get_llm_response(self, prompt, temperature=0.0):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=prompt,
-            temperature=0.0
+            temperature=temperature
         )
         return response
 
     def generate_role_prompt(self, n_players, subtask_list):
-        prompt = '''Given a list of tasks in the game Overcooked, suggest a few different ways I could divide up the tasks into {} roles.
-
-                    Tasks: {}
-
-                    Format each suggestion as [Role name]: [Task list]
-                    '''.format(str(n_players), subtask_list)
+        prompt = '''{}
+                    I want to divide these tasks between {} players. \
+                    Suggest a few ways we could divide these tasks into roles and what those roles would be called.\
+                    '''.format(subtask_list, str(n_players))
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
         return messages
     
-    def prompt(self, subtask_list):
+    def query_for_role_divisions(self, subtask_list):
         query = self.generate_role_prompt(2, subtask_list)
         response = self.get_llm_response(query)
-        print(response)
+        text_response = response["choices"][0]["message"]["content"]
 
-    def parse_gpt_response(self, text):
-        # TODO: parse the response from GPT to get the role suggestions
-        # maybe use regex?
-        raise NotImplementedError
-
+        # update query and request for format as python dictionary
+        query.append({"role": "assistant", "content": text_response})
+        query.append({"role": "user", "content": FORMATTING_PROMPT})
+        formatted_response = self.get_llm_response(query)
+        
+        try:
+            res = json.loads(formatted_response["choices"][0]["message"]["content"].replace("'", "\""))
+        except json.decoder.JSONDecodeError:
+            print("Error: response from GPT-3 was not formatted as a Python dictionary.")
+            print("Response: {}".format(formatted_response["choices"][0]["message"]["content"]))
+            return None
+        return res
 
 if __name__ == "__main__":
     gpt = GPTRolePrompter()
-    gpt.prompt("""['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser,
-                         'Putting onion in pot', 'Putting tomato in pot',
-                         'Grabbing dish from dispenser', 'Grabbing dish from counter',
-                         'Placing dish closer to pot', 'Getting the soup',
-                         'Grabbing soup from counter', 'Placing soup closer',
-                         'Serving the soup']""")
+    # gpt.prompt("""['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser,
+    #                      'Putting onion in pot', 'Putting tomato in pot',
+    #                      'Grabbing dish from dispenser', 'Grabbing dish from counter',
+    #                      'Placing dish closer to pot', 'Getting the soup',
+    #                      'Grabbing soup from counter', 'Placing soup closer',
+    #                      'Serving the soup']""")
+    # print(json.loads(SAMPLE_GPT_OUTPUT["choices"][0]["message"]["content"].replace("'", "\"")))
