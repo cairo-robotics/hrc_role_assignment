@@ -46,7 +46,7 @@ class GPTRolePrompter:
                     Suggest a few ways we could divide these tasks into roles and what those roles would be called.\
                     '''.format(subtask_list, str(n_players))
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a task manager for kitchen staff."},
             {"role": "user", "content": prompt}
         ]
         return messages
@@ -64,17 +64,17 @@ class GPTRolePrompter:
         try:
             res = json.loads(formatted_response["choices"][0]["message"]["content"].replace("'", "\""))
         except json.decoder.JSONDecodeError:
-            print("Error: response from GPT-3 was not formatted as a Python dictionary.")
+            print("Error: response from model API was not formatted as a Python dictionary.")
             print("Response: {}".format(formatted_response["choices"][0]["message"]["content"]))
             return None
         return res
 
 if __name__ == "__main__":
     gpt = GPTRolePrompter()
-    # gpt.prompt("""['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser,
-    #                      'Putting onion in pot', 'Putting tomato in pot',
-    #                      'Grabbing dish from dispenser', 'Grabbing dish from counter',
-    #                      'Placing dish closer to pot', 'Getting the soup',
-    #                      'Grabbing soup from counter', 'Placing soup closer',
-    #                      'Serving the soup']""")
-    # print(json.loads(SAMPLE_GPT_OUTPUT["choices"][0]["message"]["content"].replace("'", "\"")))
+    gpt.query_for_role_divisions("""['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser,
+                         'Putting onion in pot', 'Putting tomato in pot',
+                         'Grabbing dish from dispenser', 'Grabbing dish from counter',
+                         'Placing dish closer to pot', 'Getting the soup',
+                         'Grabbing soup from counter', 'Placing soup closer',
+                         'Serving the soup']""")
+    print(json.loads(SAMPLE_GPT_OUTPUT["choices"][0]["message"]["content"].replace("'", "\"")))
