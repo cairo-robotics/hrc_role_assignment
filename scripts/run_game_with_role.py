@@ -295,6 +295,66 @@ def create_mask_from_task_list(task_list):
 
 SAMPLE_GPT_OUTPUT = {'Division 1': {'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'], 'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']}, 'Division 2': {'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'], 'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 3': {'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 4': {'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}}
 
+
+# v1 of spatial role generation -- just simple hand coded categories
+def generate_spatial_roles_simple(mdp, subtasks):
+    jobs_by_area = {
+        "top" : set([]),
+        "bottom" : set([]),
+        "left" : set([]),
+        "right" : set([]),
+    }
+    for x in range(mdp.shape[0]):
+        for y in range(mdp.shape[1]):
+            terrain_type = mdp.get_terrain_type_at_pos((x,y))
+            sbts_to_add = []
+            if terrain_type == 'O':
+                # onion dispenser
+                sbts_to_add = [
+                    'get_onion_from_dispenser',
+                    'put_onion_closer'
+                ]
+            elif terrain_type == 'D':
+                # dish dispenser
+                sbts_to_add = [
+                    'get_plate_from_dish_rack',
+                    'put_plate_closer',
+                ]
+            elif terrain_type == 'P':
+                # pot
+                sbts_to_add = [
+                    'put_onion_in_pot',
+                    'get_soup_from_pot',
+                    'put_soup_closer'
+                ]
+            elif terrain_type == 'S':
+                # serving counter
+                sbts_to_add = [
+                    'serve_soup'
+                ]
+            elif terrain_type == 'X':
+                # counter
+                sbts_to_add = [
+                    'get_onion_from_counter',
+                    'get_plate_from_counter',
+                    'get_soup_from_counter'
+                ]
+
+            if not sbts_to_add:
+                continue
+
+            if x < mdp.shape[0] // 2:
+                jobs_by_area["left"].update(sbts_to_add)
+            else:
+                jobs_by_area["right"].update(sbts_to_add)
+            if y < mdp.shape[1] // 2:
+                jobs_by_area["top"].update(sbts_to_add)
+            else:
+                jobs_by_area["bottom"].update(sbts_to_add)
+
+    return jobs_by_area
+
+
 if __name__ == "__main__":
     """
     Sample commands
@@ -321,7 +381,7 @@ if __name__ == "__main__":
     gpt = GPTRolePrompter()
     # roles = gpt.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST)
     roles = SAMPLE_GPT_OUTPUT
-    # print(f'ROLES: {roles}')
+    print(f'ROLES: {roles}')
 
     # pick first one for testing purposes
     for key in roles:
@@ -337,8 +397,12 @@ if __name__ == "__main__":
     mask = create_mask_from_task_list(role1_tasks)
     print(f'MASK: {mask}')
 
-    print(f'HUMAN ROLE: {role2}')
+    # print(f'HUMAN ROLE: {role2}')
 
 
-    dc = App(args, agent=agent, teammate=tm, layout=args.layout, p_idx=args.p_idx, role_mask=mask)
+    dc      = App(args, agent=agent, teammate=tm, layout=args.layout, p_idx=args.p_idx, role_mask=mask)
+    mdp     = dc.env.mdp
+
+    print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASKS))    
+
     dc.on_execute()
