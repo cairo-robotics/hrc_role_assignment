@@ -1,7 +1,9 @@
 from oai_agents.common.subtasks import Subtasks
-from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker
+# from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+# from oai_agents.agents.hrl import MultiAgentSubtaskWorker
 from oai_agents.common.arguments import get_arguments
+from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, OvercookedState, PlayerState, ObjectState, Action, Direction
+from overcooked_ai_py.planning.planners import MediumLevelActionManager, NO_COUNTERS_PARAMS
 
 from pathlib import Path
 import unittest
@@ -19,6 +21,9 @@ class RoleAssigner:
         self.layout_name = layout_name
         self.args = args
         self.n_players = n_players
+        self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
+        self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, NO_COUNTERS_PARAMS, force_compute=False)
+        self.start_state_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
 
     def evaluate_single_role(self, role_subtasks):
         """
@@ -28,18 +33,73 @@ class RoleAssigner:
         
         raise NotImplementedError
     
-    def evaluate_start_to_end(self, start_state, subtask):
+    
+    def fetch_goal_locations(self, subtask, overcooked_state=None):
+        # stripped down version of the process_for_player function in overcooked_mdp.py
+        goal_object = Subtasks.IDS_TO_GOAL_MARKERS[Subtasks.SUBTASKS_TO_IDS[subtask]]
+        mdp = self.mdp
+        if overcooked_state is None:
+            try:
+                overcooked_state = self.start_state_fn(curr_subtask=subtask, random_pos=False)
+            except ValueError:
+                print("No valid start state found for subtask: {}".format(subtask))
+                return []
+        try:
+            if goal_object == "counters":
+                return mdp.get_empty_counter_locations(overcooked_state)
+            elif goal_object == "empty_pot":
+                pot_states = mdp.get_pot_states(overcooked_state)
+                locations = pot_states['empty'] + pot_states['1_items'] + pot_states['2_items']
+                return locations
+            elif goal_object == "full_pot":
+                pot_states = mdp.get_pot_states(overcooked_state)
+                locations = pot_states['cooking'] + pot_states['ready']
+                return locations
+            elif goal_object == "onion_dispenser":
+                return mdp.get_onion_dispenser_locations()
+            elif goal_object == "tomato_dispenser":
+                return mdp.get_tomato_dispenser_locations()
+            elif goal_object == "dish_dispenser":
+                return mdp.get_dish_dispenser_locations()
+            elif goal_object == "serving_station":
+                return mdp.get_serving_locations()
+            elif goal_object in ["onion", "tomato", "dish", "soup"]:
+                locations = []
+                for obj in overcooked_state.all_objects_list:
+                    if obj.name == goal_object:
+                        locations.append(obj)
+                return locations
+            else:
+                return []
+        except ValueError:
+            print("No valid goal locations found for subtask: {}".format(subtask))
+            return []
+    
+    def evaluate_start_to_end(self, subtask, prev_location = None):
         """
         param start_state: Overcooked PlayerState (?)
         param subtask: subtask name (string)
-        return: heuristic eval, end state
+        return: heuristic eval, 
         """
-        subtask_id = Subtasks.SUBTASKS_TO_IDS[subtask]
-        env_kwargs = {'single_subtask_id': subtask_id, 'stack_frames': False, 'full_init': True, 'args': self.args}
-        env = OvercookedSubtaskGymEnv(layout_name=self.layout_name, **env_kwargs)
-        worker_agent = MultiAgentSubtaskWorker.load(Path(self.args.base_dir / 'agent_models' / "HAHA" / "worker"), self.args)
 
-
+        # TODO: Update so that it measures distance from last subtask position, rather than start
+        try:
+            start_state = self.start_state_fn(curr_subtask=subtask, random_pos=False)
+        except ValueError:
+            print("No valid start state found for subtask: {}".format(subtask))
+            return None, None
+        # print(start_state)
+        goal_locations = self.fetch_goal_locations(subtask, start_state)
+        start_pos_and_or = start_state.players_pos_and_or[0]
+        try:
+            if prev_location is not None:
+                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_between_features([prev_location], goal_locations, with_argmin=True)
+            else:
+                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_to_feature(start_pos_and_or, goal_locations, with_argmin=True)
+            return min_dist_to_goal, best_goal
+        except AssertionError:
+            print("No connection from player position {} to goal locations {}".format(prev_location or start_pos_and_or, goal_locations))
+            return None, None
 
     def assign_roles(self, roles, time, tasksNeeded):
         """
@@ -81,35 +141,52 @@ class RoleAssigner:
                 print(f"{v.varName} = {v.x}")
 
 
-            
-
 class TestRoleAssignment(unittest.TestCase):
+
+    def test_fetch_goal_locations(self):
+        layout = "asymmetric_advantages"
+
+        print("Testing goal location fetching for layout: {}".format(layout))
+        role_assigner = RoleAssigner(layout_name=layout, args=None)
+        for sbt in Subtasks.SUBTASKS:
+            print("Testing goal locations for subtask: {}".format(sbt))
+            print(role_assigner.fetch_goal_locations(sbt))
+
     def test_evaluate_start_to_end(self):
-        print("Testing start to end evaluation")
+        print("Testing start to end evaluation for layout: asymmetric_advantages")
         args = get_arguments()
-        role_assigner = RoleAssigner(layout_name="cramped_room", args=args)
-        subtask = 'get_onion_from_dispenser'
-        role_assigner.evaluate_start_to_end(None, subtask)
+        role_assigner = RoleAssigner(layout_name="asymmetric_advantages", args=args)
+        player_pose = None
+        for sbt in Subtasks.SUBTASKS:
+            print("Testing start to end evaluation for subtask: {}".format(sbt))
+            score, goal = role_assigner.evaluate_start_to_end(sbt, player_pose)
+            print(score, goal)
+            if goal is not None:
+                player_pose = goal
 
-    def test_evaluate_single_role(self):
-        print("Testing role evaluation")
-        role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
+            # NOTE: this is just to test the function, not the actual heuristic
+            # particularly the heuristic should be less sensitive to the order of subtasks (maybe a sum of the minimum distances
+            # from each subtask to the next, or something like that)
 
-        role = ['get_onion', 'cook_onion', 'serve_soup']
-        role_assigner.evaluate_single_role(role)
+    # def test_evaluate_single_role(self):
+    #     print("Testing role evaluation")
+    #     role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
 
-    def test_assign_roles(self):
-        print("Testing role assignment")
-        role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
+    #     role = ['get_onion', 'cook_onion', 'serve_soup']
+    #     role_assigner.evaluate_single_role(role)
 
-        time = {'A': 2, 'B': 4, 'C': 1}  # Minimum time it takes for either player to perform the role
-        roles = {
-        'A': ['get_onion', 'cook_onion', 'serve_soup'], 
-        'B': ['get_onion', 'place_onion', 'chop_onion'], 
-        'C': ['place_onion', 'chop_onion', 'serve_soup']
-        }
-        tasksNeeded = ['get_onion', 'chop_onion', 'cook_onion', 'serve_soup']
-        role_assigner.assign_roles(roles, time, tasksNeeded)
+    # def test_assign_roles(self):
+    #     print("Testing role assignment")
+    #     role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
+
+    #     time = {'A': 2, 'B': 4, 'C': 1}  # Minimum time it takes for either player to perform the role
+    #     roles = {
+    #     'A': ['get_onion', 'cook_onion', 'serve_soup'], 
+    #     'B': ['get_onion', 'place_onion', 'chop_onion'], 
+    #     'C': ['place_onion', 'chop_onion', 'serve_soup']
+    #     }
+    #     tasksNeeded = ['get_onion', 'chop_onion', 'cook_onion', 'serve_soup']
+    #     role_assigner.assign_roles(roles, time, tasksNeeded)
 
 if __name__ == "__main__":
     unittest.main()
