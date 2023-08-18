@@ -11,6 +11,8 @@ import unittest
 from gurobipy import *
 # import gurobipy as gp
 
+from itertools import combinations
+
 class RoleAssigner:
     def __init__(self, layout_name, args, n_players=2):
         """
@@ -28,12 +30,49 @@ class RoleAssigner:
     def evaluate_single_role(self, role_subtasks):
         """
         param role: a list of subtasks in oai_agents.subtasks.SUBTASKS format
-        return: heuristic eval
+        return: heuristic eval (by way of mini TSP)
+        NOTE: this version doesn't consider any ordering constraints among the subtasks
+        TODO: fix the above ;)
         """
-        
-        raise NotImplementedError
-    
-    
+        distances = {}
+        goals     = {}
+
+        for task in role_subtasks:
+            dist, goal = self.evaluate_subtask_traj(task)
+            if dist is None:
+                print("No connection from {} to {}, role invalid".format(task1, task2))
+                
+            goals[task] = goal
+
+        for task1, task2 in combinations(role_subtasks, 2):
+            dist, goal = self.evaluate_subtask_traj(task1, goals[task2])
+
+            distances[task1, task2] = dist
+            print("Distance from {} to {} is {}".format(task1, task2, dist))
+
+        m = Model()
+        vars = m.addVars(distances.keys(), obj=distances, vtype=GRB.BINARY, name="x")
+
+        for i, j in distances:
+            vars[j, i] = vars[i, j]
+
+        cons = m.addConstrs((vars.sum(i, '*') == 2  for i in role_subtasks), name="c")
+
+        # cons = m.addConstr(vars.sum("start", '*') == 1, name="c")
+
+        m._vars = vars
+        m.optimize()
+        solution = m.getAttr('x', vars)
+        selected = [(i, j) for i, j in solution.keys() if solution[i, j] > 0.5]
+        selected_goals = [goals[i] for i, j in selected]
+
+        for i in range(len(selected) - 1):
+            if selected[i] == selected[i+1]:
+                # selected.pop(i+1)
+                selected_goals[i+1] = None
+
+        return m.objVal, selected, selected_goals
+
     def fetch_goal_locations(self, subtask, overcooked_state=None):
         # stripped down version of the process_for_player function in overcooked_mdp.py
         goal_object = Subtasks.IDS_TO_GOAL_MARKERS[Subtasks.SUBTASKS_TO_IDS[subtask]]
@@ -75,14 +114,13 @@ class RoleAssigner:
             print("No valid goal locations found for subtask: {}".format(subtask))
             return []
     
-    def evaluate_start_to_end(self, subtask, prev_location = None):
+    def evaluate_subtask_traj(self, subtask, prev_location = None):
         """
         param start_state: Overcooked PlayerState (?)
         param subtask: subtask name (string)
-        return: heuristic eval, 
+        return: heuristic eval
         """
 
-        # TODO: Update so that it measures distance from last subtask position, rather than start
         try:
             start_state = self.start_state_fn(curr_subtask=subtask, random_pos=False)
         except ValueError:
@@ -152,41 +190,40 @@ class TestRoleAssignment(unittest.TestCase):
             print("Testing goal locations for subtask: {}".format(sbt))
             print(role_assigner.fetch_goal_locations(sbt))
 
-    def test_evaluate_start_to_end(self):
+    def test_evaluate_subtask_traj(self):
         print("Testing start to end evaluation for layout: asymmetric_advantages")
         args = get_arguments()
         role_assigner = RoleAssigner(layout_name="asymmetric_advantages", args=args)
         player_pose = None
         for sbt in Subtasks.SUBTASKS:
             print("Testing start to end evaluation for subtask: {}".format(sbt))
-            score, goal = role_assigner.evaluate_start_to_end(sbt, player_pose)
+            score, goal = role_assigner.evaluate_subtask_traj(sbt, player_pose)
             print(score, goal)
             if goal is not None:
                 player_pose = goal
 
-            # NOTE: this is just to test the function, not the actual heuristic
-            # particularly the heuristic should be less sensitive to the order of subtasks (maybe a sum of the minimum distances
-            # from each subtask to the next, or something like that)
+    def test_evaluate_single_role(self):
+        print("Testing role evaluation")
+        role_assigner = RoleAssigner(layout_name="large_room", args=None)
 
-    # def test_evaluate_single_role(self):
-    #     print("Testing role evaluation")
-    #     role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
+        role_subtasks = ['get_onion_from_dispenser', 'put_onion_in_pot', 
+                'get_plate_from_dish_rack', 'get_soup',
+                  'serve_soup']
+        score, route, goal = role_assigner.evaluate_single_role(role_subtasks)
+        print(score, route, goal)
 
-    #     role = ['get_onion', 'cook_onion', 'serve_soup']
-    #     role_assigner.evaluate_single_role(role)
+    def test_assign_roles(self):
+        print("Testing role assignment")
+        role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
 
-    # def test_assign_roles(self):
-    #     print("Testing role assignment")
-    #     role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
-
-    #     time = {'A': 2, 'B': 4, 'C': 1}  # Minimum time it takes for either player to perform the role
-    #     roles = {
-    #     'A': ['get_onion', 'cook_onion', 'serve_soup'], 
-    #     'B': ['get_onion', 'place_onion', 'chop_onion'], 
-    #     'C': ['place_onion', 'chop_onion', 'serve_soup']
-    #     }
-    #     tasksNeeded = ['get_onion', 'chop_onion', 'cook_onion', 'serve_soup']
-    #     role_assigner.assign_roles(roles, time, tasksNeeded)
+        time = {'A': 2, 'B': 4, 'C': 1}  # Minimum time it takes for either player to perform the role
+        roles = {
+        'A': ['get_onion', 'cook_onion', 'serve_soup'], 
+        'B': ['get_onion', 'place_onion', 'chop_onion'], 
+        'C': ['place_onion', 'chop_onion', 'serve_soup']
+        }
+        tasksNeeded = ['get_onion', 'chop_onion', 'cook_onion', 'serve_soup']
+        role_assigner.assign_roles(roles, time, tasksNeeded)
 
 if __name__ == "__main__":
     unittest.main()
