@@ -1,12 +1,6 @@
 from oai_agents.common.subtasks import Subtasks
-# from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
-# from oai_agents.agents.hrl import MultiAgentSubtaskWorker
-from oai_agents.common.arguments import get_arguments
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, OvercookedState, PlayerState, ObjectState, Action, Direction
+from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
 from overcooked_ai_py.planning.planners import MediumLevelActionManager, NO_COUNTERS_PARAMS
-
-from pathlib import Path
-import unittest
 
 from gurobipy import *
 # import gurobipy as gp
@@ -27,7 +21,7 @@ class RoleAssigner:
         self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, NO_COUNTERS_PARAMS, force_compute=False)
         self.start_state_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
 
-    def evaluate_single_role(self, role_subtasks):
+    def evaluate_single_role(self, role_subtasks, player=0):
         """
         param role: a list of subtasks in oai_agents.subtasks.SUBTASKS format
         return: heuristic eval (by way of mini TSP)
@@ -37,18 +31,28 @@ class RoleAssigner:
         distances = {}
         goals     = {}
 
+
+        if len(role_subtasks) == 1:
+            dist, goal = self.evaluate_subtask_traj(role_subtasks, player=player)
+            return dist, goal
+
         for task in role_subtasks:
-            dist, goal = self.evaluate_subtask_traj(task)
-            if dist is None:
-                print("No connection from {} to {}, role invalid".format(task1, task2))
-                
+            dist, goal = self.evaluate_subtask_traj(task, player=player)
+            if goal is None:
+                print("No connection to {} for player {}, role invalid".format(task, player))
+                return None, None, None
             goals[task] = goal
 
         for task1, task2 in combinations(role_subtasks, 2):
-            dist, goal = self.evaluate_subtask_traj(task1, goals[task2])
+            dist, goal = self.evaluate_subtask_traj(task1, goals[task2], player=player)
 
             distances[task1, task2] = dist
             print("Distance from {} to {} is {}".format(task1, task2, dist))
+
+        if len(role_subtasks) <= 3:
+            # Invalid for TSP, so just return the sum
+            return sum(distances.values()), role_subtasks, [goals[task] for task in role_subtasks]
+
 
         m = Model()
         vars = m.addVars(distances.keys(), obj=distances, vtype=GRB.BINARY, name="x")
@@ -114,7 +118,7 @@ class RoleAssigner:
             print("No valid goal locations found for subtask: {}".format(subtask))
             return []
     
-    def evaluate_subtask_traj(self, subtask, prev_location = None):
+    def evaluate_subtask_traj(self, subtask, prev_location = None, player=0):
         """
         param start_state: Overcooked PlayerState (?)
         param subtask: subtask name (string)
@@ -122,13 +126,14 @@ class RoleAssigner:
         """
 
         try:
-            start_state = self.start_state_fn(curr_subtask=subtask, random_pos=False)
+            start_state = self.start_state_fn(p_idx=player, curr_subtask=subtask, random_pos=False)
+        
         except ValueError:
             print("No valid start state found for subtask: {}".format(subtask))
             return None, None
         # print(start_state)
         goal_locations = self.fetch_goal_locations(subtask, start_state)
-        start_pos_and_or = start_state.players_pos_and_or[0]
+        start_pos_and_or = start_state.players_pos_and_or[player]
         try:
             if prev_location is not None:
                 min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_between_features([prev_location], goal_locations, with_argmin=True)
@@ -138,37 +143,62 @@ class RoleAssigner:
         except AssertionError:
             print("No connection from player position {} to goal locations {}".format(prev_location or start_pos_and_or, goal_locations))
             return None, None
+        
+    def evaluate_roles(self, roles):
+        cost_dicts = []
+        for player in range(self.n_players):
+            cost_dicts.append({})
+            for role in roles.keys():
+                print("Evaluating role {} for player {}".format(role, player))
+                value, route, goal = self.evaluate_single_role(roles[role], player=player)
+                cost_dicts[player][role] = value, goal
+
+        return cost_dicts
 
     def assign_roles(self, roles, time, tasksNeeded):
         """
         param all_roles: role suggestions in format {role_name: [subtask1, subtask2, ...]}
         param subtask_list: list of subtasks that need to be completed in format [subtask1, subtask2, ...]
+        param time: minimum time it takes for each player to perform the role in format [{role_name: time_p1,...}, {role_name: time_p2,...},...]
         """
 
         # Model
         m = Model()
 
         # Variables
+
+        players = [0, 1]
+        # role assignment
         x = {}
-        for role in roles:
-            x[role] = m.addVar(vtype=GRB.BINARY, name=f"x[{role}]")
-                
+        for player in players:
+            for role in roles:
+                x[role, player] = m.addVar(vtype=GRB.BINARY, name=f"x[{role},{player}]")
+        
+        # task coverage by role assignment
         y = {}
         for role in roles:
             for task in roles[role]:
                 y[role, task] = m.addVar(vtype=GRB.BINARY, name=f"y[{role},{task}]")
 
+        # max constraint
+        total_time_per_player = m.addVars(players, vtype=GRB.CONTINUOUS, name="total_time_per_player")
+        total_constr = m.addConstrs((total_time_per_player[player] == sum(x[role, player] * time[player][role] for role in roles) for player in players), name="total_constr")
+
+        max_obj = m.addVar(vtype=GRB.CONTINUOUS, name="max_obj")
+        max_constr = m.addConstr(max_obj == max_(total_time_per_player[player] for player in players), name="max_constr")
+
         # Each task that is needed must be covered by at least one role
         for task in tasksNeeded:
             m.addConstr(sum(y[role, task] for role in roles if task in roles[role]) >= 1, name=f"task_{task}")
 
-        # Role-task pair can only be active if the role is assigned
+        # Role-task pair can only be active if the role is assigned to at least one player
         for role in roles:
             for task in roles[role]:
-                m.addConstr(y[role,task] <= x[role], name=f"link_{role},{task}")
+                m.addConstr(y[role, task] <= sum(x[role, player] for player in players) , name=f"role_{role}_task_{task}")
 
-        # Objective: Minimize total time
-        m.setObjective(sum(x[role] * time[role] for role in roles), GRB.MINIMIZE)
+        # Objective: Minimize maximum time taken by any player
+        m.setObjective(max_obj, GRB.MINIMIZE)
+
 
         # Solve
         m.optimize()
@@ -178,52 +208,9 @@ class RoleAssigner:
             if v.x > 0:
                 print(f"{v.varName} = {v.x}")
 
+        # Get solution:
+        solution = m.getAttr('x', x)
+        selected_roles = [role for role in solution.keys() if solution[role] > 0.5]
+        print("Selected roles: {}".format(selected_roles))
+        return solution, selected_roles
 
-class TestRoleAssignment(unittest.TestCase):
-
-    def test_fetch_goal_locations(self):
-        layout = "asymmetric_advantages"
-
-        print("Testing goal location fetching for layout: {}".format(layout))
-        role_assigner = RoleAssigner(layout_name=layout, args=None)
-        for sbt in Subtasks.SUBTASKS:
-            print("Testing goal locations for subtask: {}".format(sbt))
-            print(role_assigner.fetch_goal_locations(sbt))
-
-    def test_evaluate_subtask_traj(self):
-        print("Testing start to end evaluation for layout: asymmetric_advantages")
-        args = get_arguments()
-        role_assigner = RoleAssigner(layout_name="asymmetric_advantages", args=args)
-        player_pose = None
-        for sbt in Subtasks.SUBTASKS:
-            print("Testing start to end evaluation for subtask: {}".format(sbt))
-            score, goal = role_assigner.evaluate_subtask_traj(sbt, player_pose)
-            print(score, goal)
-            if goal is not None:
-                player_pose = goal
-
-    def test_evaluate_single_role(self):
-        print("Testing role evaluation")
-        role_assigner = RoleAssigner(layout_name="large_room", args=None)
-
-        role_subtasks = ['get_onion_from_dispenser', 'put_onion_in_pot', 
-                'get_plate_from_dish_rack', 'get_soup',
-                  'serve_soup']
-        score, route, goal = role_assigner.evaluate_single_role(role_subtasks)
-        print(score, route, goal)
-
-    def test_assign_roles(self):
-        print("Testing role assignment")
-        role_assigner = RoleAssigner(layout_name="cramped_room", args=None)
-
-        time = {'A': 2, 'B': 4, 'C': 1}  # Minimum time it takes for either player to perform the role
-        roles = {
-        'A': ['get_onion', 'cook_onion', 'serve_soup'], 
-        'B': ['get_onion', 'place_onion', 'chop_onion'], 
-        'C': ['place_onion', 'chop_onion', 'serve_soup']
-        }
-        tasksNeeded = ['get_onion', 'chop_onion', 'cook_onion', 'serve_soup']
-        role_assigner.assign_roles(roles, time, tasksNeeded)
-
-if __name__ == "__main__":
-    unittest.main()
