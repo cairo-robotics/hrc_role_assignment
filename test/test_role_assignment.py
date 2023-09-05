@@ -2,7 +2,7 @@ import unittest
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks
 
-from role_assignment.role_assignment import RoleAssigner
+from scripts.role_assignment import RoleAssigner
 
 class TestRoleAssignment(unittest.TestCase):
 

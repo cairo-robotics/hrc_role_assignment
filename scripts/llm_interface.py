@@ -4,6 +4,28 @@ import json
 
 FORMATTING_PROMPT = "Please format your last response as a Python dictionary. Use the format {'Division name' : {'Role name' : ['Task list']}}"
 
+# SAMPLE_GPT_OUTPUT = {
+#   "id": "chatcmpl-7gJb4ll8OC1G9ifdPzbjkBx95l99A",
+#   "object": "chat.completion",
+#   "created": 1690319462,
+#   "model": "gpt-3.5-turbo-0613",
+#   "choices": [
+#     {
+#       "index": 0,
+#       "message": {
+#         "role": "assistant",
+#         "content": "{\n  'Division 1': {\n    'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'],\n    'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']\n  },\n  'Division 2': {\n    'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'],\n    'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 3': {\n    'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 4': {\n    'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  }\n}"
+#       },
+#       "finish_reason": "stop"
+#     }
+#   ],
+#   "usage": {
+#     "prompt_tokens": 514,
+#     "completion_tokens": 372,
+#     "total_tokens": 886
+#   }
+# }
+
 SAMPLE_GPT_OUTPUT = {
   "id": "chatcmpl-7gJb4ll8OC1G9ifdPzbjkBx95l99A",
   "object": "chat.completion",
@@ -60,12 +82,16 @@ class GPTRolePrompter:
         query.append({"role": "assistant", "content": text_response})
         query.append({"role": "user", "content": FORMATTING_PROMPT})
         formatted_response = self.get_llm_response(query)
-        
+        formatted_response = self.process_gpt_response(formatted_response)
+
+        return formatted_response
+    
+    def process_gpt_response(self, response):
         try:
-            res = json.loads(formatted_response["choices"][0]["message"]["content"].replace("'", "\""))
+            res = json.loads(response["choices"][0]["message"]["content"].replace("'", "\""))
         except json.decoder.JSONDecodeError:
             print("Error: response from model API was not formatted as a Python dictionary.")
-            print("Response: {}".format(formatted_response["choices"][0]["message"]["content"]))
+            print("Response: {}".format(response["choices"][0]["message"]["content"]))
             return None
         return res
 
