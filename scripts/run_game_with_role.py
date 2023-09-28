@@ -296,7 +296,8 @@ def create_mask_from_task_list(task_list):
 SAMPLE_GPT_OUTPUT = {'Division 1': {'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'], 'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']}, 'Division 2': {'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'], 'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 3': {'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 4': {'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}}
 
 
-# v1 of spatial role generation -- just simple hand coded categories
+# v1 of spatial role generation -- quick-n-dirty, just simple hand coded categories
+# TODO: add improved spatial clustering using worker's motion planning
 def generate_spatial_roles_simple(mdp, subtasks):
     jobs_by_area = {
         "top" : set([]),
@@ -362,7 +363,7 @@ if __name__ == "__main__":
     """
     additional_args = [
         ('--agent', {'type': str, 'default': 'human', 'help': '"human" to used keyboard inputs or a path to a saved agent'}),
-        ('--teammate', {'type': str, 'default': 'agent_models/HAHA', 'help': 'Path to saved agent to use as teammate'}),
+        ('--teammate', {'type': str, 'default': 'agent_models/HAHA_bcp', 'help': 'Path to saved agent to use as teammate'}),
         ('--layout', {'type': str, 'default': 'counter_circuit_o_1order', 'help': 'Layout to play on'}),
         ('--p_idx', {'type': int, 'default': 0, 'help': 'Player idx of agent (teammate will have other player idx), Can be 0 or 1.'})
     ]
@@ -370,7 +371,8 @@ if __name__ == "__main__":
     args = get_arguments(additional_args)
 
     t_idx = 1 - args.p_idx
-    tm = load_agent(Path(args.teammate), args)
+    # tm = load_agent(Path(args.teammate), args)
+    tm = DummyAgent()
     tm.set_idx(t_idx, args.layout, is_hrl=isinstance(tm, HierarchicalRL), tune_subtasks=True)
     if args.agent == 'human':
         agent = args.agent
@@ -399,10 +401,12 @@ if __name__ == "__main__":
 
     # print(f'HUMAN ROLE: {role2}')
 
+    # layout = "/media/kaleb/T7/overcooked/hrc_role_assignment/overcooked_hrl/data/layouts/1p_counter_circuit_o_1order"
+    layout=args.layout
 
-    dc      = App(args, agent=agent, teammate=tm, layout=args.layout, p_idx=args.p_idx, role_mask=mask)
+    dc      = App(args, agent=agent, teammate=tm, layout=layout, p_idx=args.p_idx, role_mask=mask)
     mdp     = dc.env.mdp
 
-    print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASKS))    
+    # print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASKS))    
 
     dc.on_execute()
