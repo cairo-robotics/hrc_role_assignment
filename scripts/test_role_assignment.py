@@ -2,7 +2,7 @@ import unittest
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks
 
-from scripts.role_assignment import RoleAssigner
+from role_assignment import RoleAssigner
 
 class TestRoleAssignment(unittest.TestCase):
 
@@ -21,7 +21,7 @@ class TestRoleAssignment(unittest.TestCase):
         role_assigner = RoleAssigner(layout_name="asymmetric_advantages", args=args)
         player_pose = None
         for sbt in Subtasks.SUBTASKS:
-            print("Testing start to end evaluation for subtask: {}".format(sbt))
+            print("Testing start to end evaluation for subtask: {} from player pose: {}".format(sbt, player_pose))
             score, goal = role_assigner.evaluate_subtask_traj(sbt, player_pose)
             print(score, goal)
             if goal is not None:

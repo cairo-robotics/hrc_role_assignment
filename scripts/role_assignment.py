@@ -123,7 +123,6 @@ class RoleAssigner:
     
     def evaluate_subtask_traj(self, subtask, prev_location = None, player=0):
         """
-        param start_state: Overcooked PlayerState (?)
         param subtask: subtask name (string)
         return: heuristic eval
         """
@@ -139,7 +138,7 @@ class RoleAssigner:
         start_pos_and_or = start_state.players_pos_and_or[player]
         try:
             if prev_location is not None:
-                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_between_features([prev_location], goal_locations, with_argmin=True)
+                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_to_feature(prev_location, goal_locations, with_argmin=True)
             else:
                 min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_to_feature(start_pos_and_or, goal_locations, with_argmin=True)
             return min_dist_to_goal, best_goal
@@ -165,9 +164,10 @@ class RoleAssigner:
         param subtask_list: list of subtasks that need to be completed in format [subtask1, subtask2, ...]
         param time: minimum time it takes for each player to perform the role in format [{role_name: time_p1,...}, {role_name: time_p2,...},...]
         """
-        if len(roles[0].keys()) == 0 and len(roles[1].keys()) == 0:
-            print("No valid roles for either player")
-            return None, None
+        # print(roles)
+        # if len(roles[0].keys()) == 0 and len(roles[1].keys()) == 0:
+        #     print("No valid roles for either player")
+        #     return None, None
 
 
         # Model
