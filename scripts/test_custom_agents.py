@@ -15,7 +15,7 @@ import time
 
 from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
-from oai_agents.agents.hrl import HierarchicalRL
+# from oai_agents.agents.hrl import HierarchicalRL
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
@@ -27,23 +27,15 @@ from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 # from scripts.train_agents import get_bc_and_human_proxy
 
-from llm_interface import GPTRolePrompter
+# from llm_interface import GPTRolePrompter
+from agents.planner_agent import PlanBasedWorkerAgent, HumanManager
 
 
-no_counters_params = {
-    'start_orientations': False,
-    'wait_allowed': False,
-    'counter_goals': [],
-    'counter_drop': [],
-    'counter_pickup': [],
-    'same_motion_goals': True
-}
-
-valid_counters = [(5, 3)]
+valid_counters = [(2, 2)]
 one_counter_params = {
     'start_orientations': False,
     'wait_allowed': False,
-    'counter_goals': valid_counters,
+    'counter_goals': True,
     'counter_drop': valid_counters,
     'counter_pickup': [],
     'same_motion_goals': True
@@ -59,14 +51,9 @@ class App:
         self.args = args
         self.layout_name = layout or 'asymmetric_advantages'
 
-        self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True, horizon=400)
-        
-        # TODO: move the mask setting to outside
-        # subtask_weights = np.zeros(Subtasks.NUM_SUBTASKS)
-        # subtask_weights[Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']] = 1
-        # subtask_weights[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
-        # subtask_weights[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1
-        # self.env.set_subtask_weights(subtask_weights)
+        self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, enc_fn="basic", ret_completed_subtasks=True, is_eval_env=True, horizon=400)
+        worker = PlanBasedWorkerAgent("plan_worker", self.env.mlam, p_idx = 1, args=args)
+        teammate = HumanManager(worker, args)
 
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=p_idx)
@@ -229,37 +216,6 @@ class App:
                 df.to_pickle(data_path / f)
 
 # Just for testing
-class HumanManagerHRL(OAIAgent):
-    def __init__(self, worker, args):
-        super(HumanManagerHRL, self).__init__('hierarchical_rl', args)
-        self.worker = worker
-        self.curr_subtask_id = 11
-        self.prev_pcs = None
-
-    def get_distribution(self, obs, sample=True):
-        if obs['player_completed_subtasks'] is not None:
-            # Completed previous subtask, set new subtask
-            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {obs["player_completed_subtasks"]}')
-            next_st = input("Enter next subtask (0-10): ")
-            self.curr_subtask_id = int(next_st)
-        obs['curr_subtask'] = self.curr_subtask_id
-        return self.worker.get_distribution(obs, sample=sample)
-
-    def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
-        print(obs['player_completed_subtasks'])
-        if np.sum(obs['player_completed_subtasks']) == 1:
-            comp_st = np.argmax(obs["player_completed_subtasks"], axis=0)
-            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {Subtasks.IDS_TO_SUBTASKS[comp_st]}')
-            doable_st = [Subtasks.IDS_TO_SUBTASKS[idx] for idx, doable in enumerate(obs['subtask_mask']) if doable == 1]
-            print('DOABLE SUBTASKS:', doable_st)
-            next_st = input("Enter next subtask (0-10): ")
-            self.curr_subtask_id = int(next_st)
-        obs['curr_subtask'] = self.curr_subtask_id
-        obs.pop('player_completed_subtasks')
-        obs.pop('teammate_completed_subtasks')
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=True)
-
-# Just for testing
 class HumanPlayer(OAIAgent):
     def __init__(self, name, args):
         super(HumanPlayer, self).__init__(name, args)
@@ -284,76 +240,6 @@ class HumanPlayer(OAIAgent):
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         return self.get_distribution(obs)
 
-def create_mask_from_task_list(task_list):
-    mask = np.zeros(Subtasks.NUM_SUBTASKS)
-    for subtask in Subtasks.HUMAN_READABLE_ST:
-        if subtask in task_list:
-            mask[Subtasks.HR_SUBTASKS_TO_IDS[subtask]] = 1.0
-    # unsure must always at least be an option
-    mask[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1.0
-    return mask
-
-SAMPLE_GPT_OUTPUT = {'Division 1': {'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'], 'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']}, 'Division 2': {'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'], 'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 3': {'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Division 4': {'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'], 'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}}
-
-
-# v1 of spatial role generation -- quick-n-dirty, just simple hand coded categories
-# TODO: add improved spatial clustering using worker's motion planning
-def generate_spatial_roles_simple(mdp, subtasks):
-    jobs_by_area = {
-        "top" : set([]),
-        "bottom" : set([]),
-        "left" : set([]),
-        "right" : set([]),
-    }
-    for x in range(mdp.shape[0]):
-        for y in range(mdp.shape[1]):
-            terrain_type = mdp.get_terrain_type_at_pos((x,y))
-            sbts_to_add = []
-            if terrain_type == 'O':
-                # onion dispenser
-                sbts_to_add = [
-                    'get_onion_from_dispenser',
-                    'put_onion_closer'
-                ]
-            elif terrain_type == 'D':
-                # dish dispenser
-                sbts_to_add = [
-                    'get_plate_from_dish_rack',
-                    'put_plate_closer',
-                ]
-            elif terrain_type == 'P':
-                # pot
-                sbts_to_add = [
-                    'put_onion_in_pot',
-                    'get_soup_from_pot',
-                    'put_soup_closer'
-                ]
-            elif terrain_type == 'S':
-                # serving counter
-                sbts_to_add = [
-                    'serve_soup'
-                ]
-            elif terrain_type == 'X':
-                # counter
-                sbts_to_add = [
-                    'get_onion_from_counter',
-                    'get_plate_from_counter',
-                    'get_soup_from_counter'
-                ]
-
-            if not sbts_to_add:
-                continue
-
-            if x < mdp.shape[0] // 2:
-                jobs_by_area["left"].update(sbts_to_add)
-            else:
-                jobs_by_area["right"].update(sbts_to_add)
-            if y < mdp.shape[1] // 2:
-                jobs_by_area["top"].update(sbts_to_add)
-            else:
-                jobs_by_area["bottom"].update(sbts_to_add)
-
-    return jobs_by_area
 
 
 if __name__ == "__main__":
@@ -373,41 +259,18 @@ if __name__ == "__main__":
     t_idx = 1 - args.p_idx
     # tm = load_agent(Path(args.teammate), args)
     tm = DummyAgent()
-    tm.set_idx(t_idx, args.layout, is_hrl=isinstance(tm, HierarchicalRL), tune_subtasks=True)
-    if args.agent == 'human':
-        agent = args.agent
-    else:
-        agent = load_agent(Path(args.agent), args)
-        agent.set_idx(args.p_idx, args.layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
+    tm.set_idx(args.p_idx, args.layout, is_hrl=False, tune_subtasks=True)
+    # if args.agent == 'human':
+    agent = args.agent
+    # else:
+    #     agent = load_agent(Path(args.agent), args)
+    #     agent.set_idx(args.p_idx, args.layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
-    # gpt = GPTRolePrompter()
-    # # roles = gpt.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST)
-    # roles = SAMPLE_GPT_OUTPUT
-    # print(f'ROLES: {roles}')
 
-    # # pick first one for testing purposes
-    # for key in roles:
-    #     role_set = roles[key]
-    #     break
-    # # agent role is the first one
-    # role1, role2 = list(role_set.keys())
-    # role1_tasks = role_set[role1]
-    # role2_tasks = role_set[role2]
+    layout = "counter_circuit"
 
-    # print(f'AGENT ROLE: {role1}')
-
-    # mask = create_mask_from_task_list(role1_tasks)
-    # print(f'MASK: {mask}')
-
-    # print(f'HUMAN ROLE: {role2}')
-
-    # layout = "/media/kaleb/T7/overcooked/hrc_role_assignment/overcooked_hrl/data/layouts/1p_counter_circuit_o_1order"
-    # layout=args.layout
-    layout = "ORA_symmetry"
-
-    dc      = App(args, agent=agent, teammate=tm, layout=layout, p_idx=args.p_idx)
+    dc      = App(args, agent=tm, teammate=tm, layout=layout, p_idx=args.p_idx)
     mdp     = dc.env.mdp
 
-    # print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASKS))    
 
     dc.on_execute()
