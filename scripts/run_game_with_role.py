@@ -28,6 +28,7 @@ from overcooked_ai_py.planning.planners import MediumLevelActionManager
 # from scripts.train_agents import get_bc_and_human_proxy
 
 from llm_interface import GPTRolePrompter
+from role_assignment import RoleAssigner
 
 
 no_counters_params = {
@@ -97,7 +98,7 @@ class App:
 
     def on_init(self):
         pygame.init()
-        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0, "orders": self.env.state.all_orders})
 
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
@@ -164,7 +165,7 @@ class App:
         return done
 
     def on_render(self, pidx=None):
-        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick, "orders": self.env.state.all_orders})
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # save = input('press y to save')
@@ -298,60 +299,47 @@ SAMPLE_GPT_OUTPUT = {'Division 1': {'Chef': ['Grabbing an onion from dispenser',
 
 # v1 of spatial role generation -- quick-n-dirty, just simple hand coded categories
 # TODO: add improved spatial clustering using worker's motion planning
-def generate_spatial_roles_simple(mdp, subtasks):
+def generate_spatial_roles_simple(mdp, human_readable_subtasks):
     jobs_by_area = {
         "top" : set([]),
         "bottom" : set([]),
         "left" : set([]),
         "right" : set([]),
     }
-    for x in range(mdp.shape[0]):
-        for y in range(mdp.shape[1]):
-            terrain_type = mdp.get_terrain_type_at_pos((x,y))
-            sbts_to_add = []
-            if terrain_type == 'O':
-                # onion dispenser
-                sbts_to_add = [
-                    'get_onion_from_dispenser',
-                    'put_onion_closer'
-                ]
-            elif terrain_type == 'D':
-                # dish dispenser
-                sbts_to_add = [
-                    'get_plate_from_dish_rack',
-                    'put_plate_closer',
-                ]
-            elif terrain_type == 'P':
-                # pot
-                sbts_to_add = [
-                    'put_onion_in_pot',
-                    'get_soup_from_pot',
-                    'put_soup_closer'
-                ]
-            elif terrain_type == 'S':
-                # serving counter
-                sbts_to_add = [
-                    'serve_soup'
-                ]
-            elif terrain_type == 'X':
-                # counter
-                sbts_to_add = [
-                    'get_onion_from_counter',
-                    'get_plate_from_counter',
-                    'get_soup_from_counter'
-                ]
 
-            if not sbts_to_add:
-                continue
-
+    for subtask in human_readable_subtasks:
+        goal_object = Subtasks.IDS_TO_GOAL_MARKERS[Subtasks.HR_SUBTASKS_TO_IDS[subtask]]
+        if goal_object == "counter" or ["onion", "tomato", "cabbage", "fish", "dish", "soup"]:
+            locations = mdp.get_counter_locations()
+        elif goal_object == "empty_pot" or goal_object == "full_pot":
+            # get any non-full pot locations
+            locations = mdp.get_pot_locations()
+        elif goal_object == "onion_dispenser":
+            locations =  mdp.get_onion_dispenser_locations()
+        elif goal_object == "tomato_dispenser":
+            locations =  mdp.get_tomato_dispenser_locations()
+        elif goal_object == "cabbage_dispenser":
+            locations = mdp.get_cabbage_dispenser_locations()
+        elif goal_object == "fish_dispenser":
+            locations = mdp.get_fish_dispenser_locations()
+        elif goal_object == "dish_dispenser":
+            locations = mdp.get_dish_dispenser_locations()
+        elif goal_object == "serving_station":
+            locations = mdp.get_serving_locations()
+        else:
+            continue
+        
+        for location in locations:
+            x, y = location
             if x < mdp.shape[0] // 2:
-                jobs_by_area["left"].update(sbts_to_add)
+                jobs_by_area["left"].add(subtask)
             else:
-                jobs_by_area["right"].update(sbts_to_add)
+                jobs_by_area["right"].add(subtask)
             if y < mdp.shape[1] // 2:
-                jobs_by_area["top"].update(sbts_to_add)
+                jobs_by_area["top"].add(subtask)
             else:
-                jobs_by_area["bottom"].update(sbts_to_add)
+                jobs_by_area["bottom"].add(subtask)
+
 
     return jobs_by_area
 
@@ -381,8 +369,13 @@ if __name__ == "__main__":
         agent.set_idx(args.p_idx, args.layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
     # gpt = GPTRolePrompter()
-    # # roles = gpt.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST)
-    # roles = SAMPLE_GPT_OUTPUT
+    # roles = gpt.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST)
+    # roles 
+    roles = SAMPLE_GPT_OUTPUT
+    flat_role_dict = {}
+    for key in roles:
+        for role in roles[key]:
+            flat_role_dict[role] = roles[key][role]
     # print(f'ROLES: {roles}')
 
     # # pick first one for testing purposes
@@ -404,10 +397,18 @@ if __name__ == "__main__":
     # layout = "/media/kaleb/T7/overcooked/hrc_role_assignment/overcooked_hrl/data/layouts/1p_counter_circuit_o_1order"
     # layout=args.layout
     layout = "ORA_symmetry"
+    # layout = "counter_circuit_o_1order"
 
     dc      = App(args, agent=agent, teammate=tm, layout=layout, p_idx=args.p_idx)
     mdp     = dc.env.mdp
 
-    # print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASKS))    
+    # print(generate_spatial_roles_simple(mdp, Subtasks.SUBTASK
+    spatial_roles =  generate_spatial_roles_simple(mdp, Subtasks.HUMAN_READABLE_ST)
+    all_roles = {**flat_role_dict, **spatial_roles}
+    print(all_roles)
+    
+    assigner = RoleAssigner(layout, None, mdp=mdp, mlam=dc.env.mlam)
+    costs = assigner.evaluate_roles(all_roles)
+    print(assigner.assign_roles(all_roles, costs, Subtasks.HUMAN_READABLE_ST))
 
     dc.on_execute()

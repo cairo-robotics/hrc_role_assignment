@@ -13,20 +13,22 @@ def calculate_roles(layout, task_list):
     role_generation = GPTRolePrompter()
     role_assigner = RoleAssigner(layout, None)
 
-    role_divisions = role_generation.process_gpt_response(SAMPLE_GPT_OUTPUT)
+    # role_divisions = role_generation.process_gpt_response(SAMPLE_GPT_OUTPUT)
+    # role_divisions = SAMPLE_GPT_OUTPUT
+    role_divisions = role_generation.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST)
     print(role_divisions)
     all_roles = {}
     for div in role_divisions:
         for role, subtasks in role_divisions[div].items():
             try:
-                all_roles[role] = [Subtasks.HR_SUBTASKS_TO_SUBTASKS[task] for task in subtasks]
+                all_roles[role] = [Subtasks.IDS_TO_SUBTASKS[Subtasks.HR_SUBTASKS_TO_IDS[task]] for task in subtasks]
             except KeyError:
                 pass
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     cost_dicts = role_assigner.evaluate_roles(all_roles)
     assignment = role_assigner.assign_roles(all_roles, cost_dicts, task_list)
     print(assignment)
     
 
 if __name__ == "__main__":
-    calculate_roles("large_room", Subtasks.SUBTASKS[:-1])
+    calculate_roles("ORA_symmetry", Subtasks.SUBTASKS[:-1])
