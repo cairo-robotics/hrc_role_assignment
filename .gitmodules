@@ -1,6 +1,6 @@
 [submodule "overcooked_ai"]
 	path = overcooked_ai
-	url = git@github.com:kalebishop/overcooked_ai.git
+	url = git@github.com:cairo-robotics/overcooked_ai.git
 	branch = kaleb_fixed
 [submodule "overcooked_hrl"]
 	path = overcooked_hrl
