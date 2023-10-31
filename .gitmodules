@@ -5,7 +5,7 @@
 [submodule "overcooked_hrl"]
 	path = overcooked_hrl
 	url = https://github.com/cairo-robotics/overcooked_hrl.git
-	branch = devel
+	branch = main
 [submodule "overcooked-demo"]
 	path = overcooked-demo
 	url = https://github.com/kalebishop/overcooked-demo.git
