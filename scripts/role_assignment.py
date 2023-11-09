@@ -1,4 +1,4 @@
-from oai_agents.common.subtasks import Subtasks
+from overcooked_role_assignment.common.subtasks import Subtasks
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
 from overcooked_ai_py.planning.planners import MediumLevelActionManager, NO_COUNTERS_PARAMS
 
@@ -10,7 +10,7 @@ from itertools import combinations
 class RoleAssigner:
     def __init__(self, layout_name, args, n_players=2):
         """
-        param env: expects oai_agents.gym_environments.base_overcooked_env.OvercookedSubtaskGymEnv
+        param env: expects overcooked_role_assignment.gym_environments.base_overcooked_env.OvercookedSubtaskGymEnv
         param n_players: int, tested for 2 players only
         """
         
@@ -23,7 +23,7 @@ class RoleAssigner:
 
     def evaluate_single_role(self, role_subtasks, player=0):
         """
-        param role: a list of subtasks in oai_agents.subtasks.SUBTASKS format
+        param role: a list of subtasks in overcooked_role_assignment.subtasks.SUBTASKS format
         return: heuristic eval (by way of mini TSP)
         NOTE: this version doesn't consider any ordering constraints among the subtasks
         TODO: fix the above ;)

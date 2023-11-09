@@ -1,10 +1,10 @@
-from oai_agents.common.subtasks import Subtasks
-from oai_agents.agents.agent_utils import DummyPolicy
+from overcooked_role_assignment.common.subtasks import Subtasks
+from overcooked_role_assignment.agents.agent_utils import DummyPolicy
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
 from overcooked_ai_py.mdp.actions import Action
 from overcooked_ai_py.planning.planners import MediumLevelActionManager, NO_COUNTERS_PARAMS
-from oai_agents.common.arguments import get_arguments
-from oai_agents.agents.base_agent import OAIAgent
+from overcooked_role_assignment.common.arguments import get_arguments
+from overcooked_role_assignment.agents.base_agent import OAIAgent
 
 import numpy as np
 import copy

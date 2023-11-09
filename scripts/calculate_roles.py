@@ -1,7 +1,7 @@
 from scripts.role_assignment import RoleAssigner
 from scripts.llm_interface import GPTRolePrompter, SAMPLE_GPT_OUTPUT
 
-from oai_agents.common.subtasks import Subtasks
+from overcooked_role_assignment.common.subtasks import Subtasks
 
 def calculate_roles(layout, task_list):
     """

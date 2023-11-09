@@ -13,14 +13,14 @@ from os.path import isfile, join
 import re
 import time
 
-from oai_agents.agents.agent_utils import DummyPolicy
-from oai_agents.agents.base_agent import OAIAgent
-# from oai_agents.agents.hrl import HierarchicalRL
-from oai_agents.common.arguments import get_arguments
-from oai_agents.common.subtasks import Subtasks
-from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.agents.agent_utils import load_agent, DummyAgent
-from oai_agents.common.state_encodings import ENCODING_SCHEMES
+from overcooked_role_assignment.agents.agent_utils import DummyPolicy
+from overcooked_role_assignment.agents.base_agent import OAIAgent
+# from overcooked_role_assignment.agents.hrl import HierarchicalRL
+from overcooked_role_assignment.common.arguments import get_arguments
+from overcooked_role_assignment.common.subtasks import Subtasks
+from overcooked_role_assignment.gym_environments.base_overcooked_env import OvercookedGymEnv
+from overcooked_role_assignment.agents.agent_utils import load_agent, DummyAgent
+from overcooked_role_assignment.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState, OvercookedGridworld
 # from overcooked_ai_py.planning.planners import MediumLevelPlanner
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
@@ -28,7 +28,7 @@ from overcooked_ai_py.planning.planners import MediumLevelActionManager
 # from scripts.train_agents import get_bc_and_human_proxy
 
 # from llm_interface import GPTRolePrompter
-from agents.planner_agent import PlanBasedWorkerAgent, HumanManager
+from overcooked_role_assignment.agents.planner_agent import PlanBasedWorkerAgent, HumanManager
 
 
 valid_counters = [(2, 2)]

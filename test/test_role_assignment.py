@@ -1,6 +1,6 @@
 import unittest
-from oai_agents.common.arguments import get_arguments
-from oai_agents.common.subtasks import Subtasks
+from overcooked_role_assignment.common.arguments import get_arguments
+from overcooked_role_assignment.common.subtasks import Subtasks
 
 from role_assignment import RoleAssigner
 
