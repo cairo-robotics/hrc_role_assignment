@@ -29,7 +29,7 @@ from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
 # from llm_interface import GPTRolePrompter
 from overcooked_role_assignment.agents.planner_agent import PlanBasedWorkerAgent, HumanManager
-
+from overcooked_role_assignment.agents.pddl_manager import PDDLAgent
 
 valid_counters = [(2, 2)]
 one_counter_params = {
@@ -41,26 +41,29 @@ one_counter_params = {
     'same_motion_goals': True
 }
 
+role_mask = np.ones([len(Subtasks.SUBTASKS)]) # TODO: change this to test different subtask masks
+
 
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agent=None, teammate=None, layout=None, fps=5, p_idx=0, role_mask=None):
+    def __init__(self, args, agent=None, teammate="human_manager", layout=None, fps=5, p_idx=0, role_mask=role_mask):
         self._running = True
         self._display_surf = None
         self.args = args
         self.layout_name = layout or 'asymmetric_advantages'
 
         self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, enc_fn="basic", ret_completed_subtasks=True, is_eval_env=True, horizon=400)
-        worker = PlanBasedWorkerAgent("plan_worker", self.env.mlam, p_idx = 1, args=args)
-        teammate = HumanManager(worker, args)
 
+        if teammate == "human_manager":
+            worker = PlanBasedWorkerAgent("plan_worker", self.env.mlam, p_idx = 1-p_idx, args=args)
+            teammate = HumanManager(worker, args)
+        else:
+            teammate = PDDLAgent("pddl_agent", self.env.mlam, role_mask=role_mask, p_idx = 1 - p_idx, args=args)
+        
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=p_idx)
         self.env.teammate.set_idx(self.env.t_idx, self.layout_name, False, True, False)
-
-        if role_mask is not None:
-            self.env.set_subtask_weights(role_mask)
 
         self.grid_shape = self.env.grid_shape
         self.agent = agent
@@ -84,7 +87,7 @@ class App:
 
     def on_init(self):
         pygame.init()
-        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0, "orders": self.env.state.all_orders})
 
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
@@ -151,7 +154,7 @@ class App:
         return done
 
     def on_render(self, pidx=None):
-        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0, "orders": self.env.state.all_orders})
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # save = input('press y to save')
@@ -267,9 +270,9 @@ if __name__ == "__main__":
     #     agent.set_idx(args.p_idx, args.layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
 
-    layout = "counter_circuit"
+    layout = "ORA_symmetry"
 
-    dc      = App(args, agent=tm, teammate=tm, layout=layout, p_idx=args.p_idx)
+    dc      = App(args, agent=agent, teammate="pddl", layout=layout, p_idx=0)
     mdp     = dc.env.mdp
 
 

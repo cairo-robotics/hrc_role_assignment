@@ -8,7 +8,7 @@ from gurobipy import *
 from itertools import combinations
 
 class RoleAssigner:
-    def __init__(self, layout_name, args, n_players=2):
+    def __init__(self, layout_name, args, n_players=2, mdp=None, mlam=None):
         """
         param env: expects overcooked_role_assignment.gym_environments.base_overcooked_env.OvercookedSubtaskGymEnv
         param n_players: int, tested for 2 players only
@@ -17,19 +17,26 @@ class RoleAssigner:
         self.layout_name = layout_name
         self.args = args
         self.n_players = n_players
-        self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
-        self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, NO_COUNTERS_PARAMS, force_compute=False)
+        self.mdp = mdp
+        if mdp is None:
+            self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
+        
+        self.mlam = mlam
+        if mlam is None:
+            self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, NO_COUNTERS_PARAMS, force_compute=False)
         self.start_state_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
 
     def evaluate_single_role(self, role_subtasks, player=0):
         """
         param role: a list of subtasks in overcooked_role_assignment.subtasks.SUBTASKS format
         return: heuristic eval (by way of mini TSP)
-        NOTE: this version doesn't consider any ordering constraints among the subtasks
+        NOTE: this version doesn't consider any ordering constraints among the subtasks OR start position for player***
         TODO: fix the above ;)
         """
         distances = {}
         goals     = {}
+
+        doable_subtasks = []
 
 
         if len(role_subtasks) == 1:
@@ -41,29 +48,36 @@ class RoleAssigner:
 
         for task in role_subtasks:
             dist, goal = self.evaluate_subtask_traj(task, player=player)
-            if goal is None:
-                print("No connection to {} for player {}, role invalid".format(task, player))
-                return None, None, None
+            # if goal is None:
+            #     # print("No connection to {} for player {}, role invalid".format(task, player))
+            #     # return None, None, None
+            #     continue
+            if goal is not None:
+                doable_subtasks.append(task)
+                # distances[task] = dist
             goals[task] = goal
 
         for task1, task2 in combinations(role_subtasks, 2):
+            if goals[task1] is None or goals[task2] is None:
+                continue
             dist, goal = self.evaluate_subtask_traj(task1, goals[task2], player=player)
 
             distances[task1, task2] = dist
             print("Distance from {} to {} is {}".format(task1, task2, dist))
 
-        if len(role_subtasks) <= 3:
+        if len(doable_subtasks) <= 3:
             # Invalid for TSP, so just return the sum
-            return sum(distances.values()), role_subtasks, [goals[task] for task in role_subtasks]
+            return sum(distances.values()), role_subtasks, [goals[task] for task in role_subtasks if goals[task] is not None]
 
 
         m = Model()
+
         vars = m.addVars(distances.keys(), obj=distances, vtype=GRB.BINARY, name="x")
 
         for i, j in distances:
             vars[j, i] = vars[i, j]
 
-        cons = m.addConstrs((vars.sum(i, '*') == 2  for i in role_subtasks), name="c")
+        cons = m.addConstrs((vars.sum(i, '*') == 2  for i in doable_subtasks), name="c")
 
         # cons = m.addConstr(vars.sum("start", '*') == 1, name="c")
 
@@ -82,7 +96,7 @@ class RoleAssigner:
 
     def fetch_goal_locations(self, subtask, overcooked_state=None):
         # stripped down version of the process_for_player function in overcooked_mdp.py
-        goal_object = Subtasks.IDS_TO_GOAL_MARKERS[Subtasks.SUBTASKS_TO_IDS[subtask]]
+        goal_object = Subtasks.IDS_TO_GOAL_MARKERS[Subtasks.HR_SUBTASKS_TO_IDS[subtask]]
         mdp = self.mdp
         if overcooked_state is None:
             try:
@@ -138,9 +152,10 @@ class RoleAssigner:
         start_pos_and_or = start_state.players_pos_and_or[player]
         try:
             if prev_location is not None:
-                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_to_feature(prev_location, goal_locations, with_argmin=True)
+                # print("prev_location:", prev_location)
+                min_dist_to_goal, best_goal, best_feature = self.mlam.motion_planner.min_cost_to_feature(prev_location, goal_locations, with_argmin=True)
             else:
-                min_dist_to_goal, best_goal = self.mlam.motion_planner.min_cost_to_feature(start_pos_and_or, goal_locations, with_argmin=True)
+                min_dist_to_goal, best_goal, best_feature = self.mlam.motion_planner.min_cost_to_feature(start_pos_and_or, goal_locations, with_argmin=True)
             return min_dist_to_goal, best_goal
         except AssertionError:
             print("No connection from player position {} to goal locations {}".format(prev_location or start_pos_and_or, goal_locations))
@@ -169,6 +184,9 @@ class RoleAssigner:
         #     print("No valid roles for either player")
         #     return None, None
 
+        print("Tasks needed: {}".format(tasksNeeded))
+        print("Roles: {}".format(roles))
+        print("Time: {}".format(time))
 
         # Model
         m = Model()
