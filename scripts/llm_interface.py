@@ -2,6 +2,8 @@ import openai
 import yaml
 import json
 
+from oai_agents.common.subtasks import Subtasks
+
 FORMATTING_PROMPT = "Please format your last response as a Python dictionary. Use the format {'Division name' : {'Role name' : ['Task list']}}"
 
 # SAMPLE_GPT_OUTPUT = {
@@ -26,27 +28,7 @@ FORMATTING_PROMPT = "Please format your last response as a Python dictionary. Us
 #   }
 # }
 
-SAMPLE_GPT_OUTPUT = {
-  "id": "chatcmpl-7gJb4ll8OC1G9ifdPzbjkBx95l99A",
-  "object": "chat.completion",
-  "created": 1690319462,
-  "model": "gpt-3.5-turbo-0613",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "{\n  'Division 1': {\n    'Chef': ['Grabbing an onion from dispenser', 'Putting onion in pot', 'Grabbing dish from dispenser', 'Placing dish closer to pot', 'Serving the soup'],\n    'Sous Chef': ['Grabbing a tomato from dispenser', 'Putting tomato in pot', 'Grabbing dish from counter', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer']\n  },\n  'Division 2': {\n    'Prep Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot'],\n    'Server': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 3': {\n    'Cook': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Waiter': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  },\n  'Division 4': {\n    'Food Prep': ['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser', 'Putting onion in pot', 'Putting tomato in pot', 'Getting the soup'],\n    'Service': ['Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']\n  }\n}"
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 514,
-    "completion_tokens": 372,
-    "total_tokens": 886
-  }
-}
+SAMPLE_GPT_OUTPUT = {'Option 1': {'Player 1 (Preparation Role)': ['Grabbing an onion from dispenser', 'Grabbing an onion from counter', 'Putting onion in pot', 'Placing onion closer to pot', 'Grabbing a tomato from dispenser', 'Grabbing a tomato from counter', 'Putting tomato in pot', 'Placing tomato closer to pot', 'Grabbing a cabbage from dispenser', 'Grabbing a cabbage from counter', 'Putting cabbage in pot', 'Placing cabbage closer to pot'], 'Player 2 (Cooking Role)': ['Grabbing a fish from dispenser', 'Grabbing a fish from counter', 'Putting fish in pot', 'Placing fish closer to pot', 'Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Option 2': {'Player 1 (Preparation Role)': ['Grabbing an onion from dispenser', 'Grabbing an onion from counter', 'Putting onion in pot', 'Placing onion closer to pot', 'Grabbing a tomato from dispenser', 'Grabbing a tomato from counter', 'Putting tomato in pot', 'Placing tomato closer to pot'], 'Player 2 (Cooking Role)': ['Grabbing a cabbage from dispenser', 'Grabbing a cabbage from counter', 'Putting cabbage in pot', 'Placing cabbage closer to pot', 'Grabbing a fish from dispenser', 'Grabbing a fish from counter', 'Putting fish in pot', 'Placing fish closer to pot', 'Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}, 'Option 3': {'Player 1 (Preparation Role)': ['Grabbing an onion from dispenser', 'Grabbing an onion from counter', 'Putting onion in pot', 'Placing onion closer to pot', 'Grabbing a cabbage from dispenser', 'Grabbing a cabbage from counter', 'Putting cabbage in pot', 'Placing cabbage closer to pot'], 'Player 2 (Cooking Role)': ['Grabbing a tomato from dispenser', 'Grabbing a tomato from counter', 'Putting tomato in pot', 'Placing tomato closer to pot', 'Grabbing a fish from dispenser', 'Grabbing a fish from counter', 'Putting fish in pot', 'Placing fish closer to pot', 'Grabbing dish from dispenser', 'Grabbing dish from counter', 'Placing dish closer to pot', 'Getting the soup', 'Grabbing soup from counter', 'Placing soup closer', 'Serving the soup']}}
 
 class GPTRolePrompter:
     def __init__(self):
@@ -97,10 +79,5 @@ class GPTRolePrompter:
 
 if __name__ == "__main__":
     gpt = GPTRolePrompter()
-    gpt.query_for_role_divisions("""['Grabbing an onion from dispenser', 'Grabbing a tomato from dispenser,
-                         'Putting onion in pot', 'Putting tomato in pot',
-                         'Grabbing dish from dispenser', 'Grabbing dish from counter',
-                         'Placing dish closer to pot', 'Getting the soup',
-                         'Grabbing soup from counter', 'Placing soup closer',
-                         'Serving the soup']""")
-    print(json.loads(SAMPLE_GPT_OUTPUT["choices"][0]["message"]["content"].replace("'", "\"")))
+    print(gpt.query_for_role_divisions(Subtasks.HUMAN_READABLE_ST))
+    # print(json.loads(SAMPLE_GPT_OUTPUT["choices"][0]["message"]["content"].replace("'", "\"")))
