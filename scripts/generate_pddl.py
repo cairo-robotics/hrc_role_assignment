@@ -3,7 +3,7 @@ import os
 from typing import Any, Callable, Optional, Union, Tuple
 
 
-class GenerateDomainPDDL:
+class GenerateProblemPDDL:
     def __init__(self,
                  subtasks: list[str],
                  task_assignments: dict[str,list[str]],
@@ -77,12 +77,14 @@ class GenerateDomainPDDL:
 
     def _generate_goal(self) -> str:
         # TODO: Figure out the correct goal ought to be.
-        # For now, it's just to complete all the subtasks
+        # For now, let's assume its the last valid subtask
 
-        goal_str = "(and\n"
-        for subtask in self._subtasks:
-            goal_str += "\t\t(complete " + subtask + ")\n"
-        goal_str += "\t)"
+        goal_str = "(complete " + self._subtasks[-2] + ")"
+
+        # goal_str = "(and\n"
+        # for subtask in self._subtasks:
+        #     goal_str += "\t\t(complete " + subtask + ")\n"
+        # goal_str += "\t)"
 
         return goal_str
 
@@ -100,11 +102,21 @@ class GenerateDomainPDDL:
         
 
 class GenerateDomainPDDL:
-    def __init__(self, args):
+    def __init__(self):
         """
         Generates a PDDL domain file for the overcooked domain.
         This defines the actions that can be taken by the mangager.
+
+        TODO: Finish this!
         """
+        domain_template = """(define (domain overcooked)
+            (:requirements :typing)
+            (:types subtask agent)
+            (:predicates
+                {predicates}
+            )
+            {actions}
+        )"""
     
 
 
@@ -120,7 +132,7 @@ if __name__ == "__main__":
                    "agent_2": ["get_onion_from_counter", "put_onion_closer"]}
 
 
-    pddl = GenerateDomainPDDL(subtasks, assignments, agents, orders)
+    pddl = GenerateProblemPDDL(subtasks, assignments, agents, orders)
     print(pddl)
     pddl.save_to_file()
 
