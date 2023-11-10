@@ -8,7 +8,7 @@ Repo used for code related to the legible role assignment project, which uses th
 ```
 git clone --recurse-submodules git@github.com:cairo-robotics/hrc_role_assignment.git
 cd hrc_role_assignment/overcooked_ai && pip install -e .
-cd ../overcooked_hrl && pip install -e .
+cd .. && pip install -e .
 ```
 
 
