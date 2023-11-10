@@ -34,7 +34,10 @@ setup(name='overcooked_role_assignment',
         'tqdm',
         'wandb',
         'gym',
+        'matplotlib',
+        'pandas',
         'pygame',
+        'openai'
       ],
       tests_require=['pytest']
     )

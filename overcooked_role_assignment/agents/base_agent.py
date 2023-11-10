@@ -61,7 +61,7 @@ class OAIAgent(ABC):
         self.layout_name = layout_name
         self.prev_state = None
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
-        self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
+        # self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
         if is_hrl:
             self.set_play_params(output_message, tune_subtasks)
 
@@ -77,13 +77,13 @@ class OAIAgent(ABC):
                              'Or, call predict with agent specific obs')
 
         obs = self.encoding_fn(self.mdp, state, self.grid_shape, self.horizon, p_idx=self.p_idx)
-        if self.stack_frames:
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.prev_state is not None:
-                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
-            else:
-                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
+        # if self.stack_frames:
+        #     obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+        #     if self.prev_state is not None:
+        #         obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
+        #     else:
+        #         obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
+        obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = [None, None]

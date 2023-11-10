@@ -165,14 +165,14 @@ class OvercookedGymEnv(Env):
         enc_fn = enc_fn or self.encoding_fn
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
 
-        if self.stack_frames(p_idx):
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]: # On reset
-                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-                self.stack_frames_need_reset[p_idx] = False
-            else:
-                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
+        # if self.stack_frames(p_idx):
+        #     obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+        #     if self.stack_frames_need_reset[p_idx]: # On reset
+        #         obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+        #         self.stack_frames_need_reset[p_idx] = False
+        #     else:
+        #         obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+        #     obs['visual_obs'] = obs['visual_obs'].squeeze()
         if self.return_completed_subtasks or (self.teammate is not None and p_idx == self.t_idx and 'player_completed_subtasks' in self.teammate.policy.observation_space.keys()):
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
@@ -187,10 +187,11 @@ class OvercookedGymEnv(Env):
             obs['player_completed_subtasks'] =  self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)
-        if p_idx == self.t_idx and self.teammate is not None:
-            obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
-        else:
-            obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
+        # if p_idx == self.t_idx and self.teammate is not None:
+        #     obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
+        # else:
+        #     obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
+        obs['state'] = self.state
         return obs
 
     def step(self, action):

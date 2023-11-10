@@ -22,6 +22,7 @@ class PDDLManager: # TODO complete
         self.mdp = mlam.mdp
         self.role_mask = role_mask
         self.p_idx = p_idx
+        self.encoding_fn = None
 
     def predict(self, state: OvercookedState) -> int:
         """
@@ -56,6 +57,7 @@ class PDDLAgent(OAIAgent):
 
     def predict(self, obs: dict, state=None, episode_start=None, deterministic: bool = False):
         if self.curr_subtask_id is None or np.sum(obs['player_completed_subtasks']) == 1:
+            print(obs)
             next_st = self.manager.predict(obs['state'])
             self.curr_subtask_id = int(next_st)
             comp_st = np.argmax(obs["player_completed_subtasks"], axis=0)
