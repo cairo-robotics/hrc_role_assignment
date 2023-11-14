@@ -230,7 +230,7 @@ class GenerateDomainPDDL:
 
         action_str  = f"(:action put_{ing}_in_pot\n"
         action_str += f":parameters (?agent - agent ?{ing} - ingredient)\n"
-        action_str += f":precondition (and (isagent ?agent) (assign put_{}_in_pot ?agent) (is{ing} ?{ing}) (holding ?{ing} ?agent))\n"
+        action_str += f":precondition (and (isagent ?agent) (assign put_{ing}_in_pot ?agent) (is{ing} ?{ing}) (holding ?{ing} ?agent))\n"
         action_str += f":effect (and (not (holding ?{ing} ?agent)) (inpot ?{ing})))\n"
 
         return action_str
@@ -252,6 +252,17 @@ class GenerateDomainPDDL:
         action_str += f":effect (and (not (holding ?{ing} ?agent)) (oncounter ?{ing})))\n"
 
         return action_str
+
+
+    def _serve_soup(self) -> str:
+
+        action_str  = "(:action serve_soup\n"
+        action_str += ":parameters (?agent - agent ?plate - plate ?soup - ingredient)\n"
+        action_str += ":precondition (and (isagent ?agent) (assign serve_soup ?agent) (issoup ?soup) (onplate ?soup ?plate))\n"
+        action_str += ":effect (and (not (onplate ?soup ?plate)) (isserved ?soup)))\n"
+
+        return action_str
+
 
 
 
